@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>쉬포니에 창고 재고관리 v1.0</title>
+<title>창고 재고관리 — 공유 버전</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1142,6 +1142,9 @@ function clearBulk(){bulkRows=[];document.getElementById('preview-wrap').classLi
 let _quaggaRunning=false, _scanLocked=false, _lastCode='', _lastCodeTime=0;
 
 function openScanner(){
+  /* 이미 실행 중이면 중복 init 방지 */
+  if(_quaggaRunning) return;
+
   const modal=document.getElementById('scanner-modal');
   modal.classList.add('open');
   document.getElementById('scanner-manual-input').value='';
@@ -1154,24 +1157,19 @@ function openScanner(){
       target:document.getElementById('quagga-container'),
       constraints:{
         facingMode:'environment',
-        width:{ideal:1280},
-        height:{ideal:720},
-        aspectRatio:{ideal:16/9}
+        width:{min:640, ideal:1280},
+        height:{min:480, ideal:720}
       },
-      /* 인식 영역을 가로 중앙 띠로 제한 — 가로 바코드 특화 */
-      area:{
-        top:'35%',
-        right:'5%',
-        left:'5%',
-        bottom:'35%'
-      }
+      /* 가로 중앙 띠 — 가로 바코드 특화 */
+      area:{top:'30%', right:'2%', left:'2%', bottom:'30%'}
     },
     locator:{
-      patchSize:'medium',
-      halfSample:true
+      patchSize:'large',   /* large = 더 넓은 패치 → 인식 범위 확대 */
+      halfSample:false     /* false = 원본 해상도로 처리 → 정확도↑ */
     },
-    numOfWorkers:2,
-    frequency:10,
+    numOfWorkers: navigator.hardwareConcurrency
+      ? Math.min(navigator.hardwareConcurrency, 4) : 2,
+    frequency:20,          /* 초당 20프레임 처리 → 속도↑ */
     decoder:{
       readers:['code_128_reader','code_39_reader'],
       multiple:false
@@ -1183,26 +1181,39 @@ function openScanner(){
       console.error('Quagga init error:',err);
       return;
     }
+
+    /* onDetected는 반드시 init 성공 콜백 안에서 등록 — 중복 방지 */
+    Quagga.offDetected(); /* 혹시 남아있는 이전 리스너 제거 */
+    Quagga.onDetected(function(result){
+      if(_scanLocked) return;
+      const code = result && result.codeResult && result.codeResult.code;
+      if(!code) return;
+      /* 신뢰도 낮은 결과 무시 (code39는 오인식이 잦음) */
+      const errors = result.codeResult.decodedCodes
+        ? result.codeResult.decodedCodes
+            .filter(c=>c.error!==undefined)
+            .map(c=>c.error)
+        : [];
+      const avgError = errors.length
+        ? errors.reduce((a,b)=>a+b,0)/errors.length : 0;
+      if(avgError > 0.25) return; /* 오류율 25% 초과 시 무시 */
+
+      /* 중복 방지 */
+      const now=Date.now();
+      if(code===_lastCode && now-_lastCodeTime<2000) return;
+      _lastCode=code; _lastCodeTime=now;
+      onBarcodeDetected(code);
+    });
+
     Quagga.start();
     _quaggaRunning=true;
-    setStatus('가로 바코드를 가이드 안에 맞춰주세요','');
-  });
-
-  Quagga.onDetected(function(result){
-    if(_scanLocked)return;
-    const code=result&&result.codeResult&&result.codeResult.code;
-    if(!code)return;
-    /* 연속 중복 방지 */
-    const now=Date.now();
-    if(code===_lastCode&&now-_lastCodeTime<2500)return;
-    _lastCode=code;_lastCodeTime=now;
-    onBarcodeDetected(code);
+    setStatus('바코드를 가이드 안에 맞춰주세요','');
   });
 }
 
 function closeScanner(){
   if(_quaggaRunning){
-    try{Quagga.offDetected();Quagga.stop();}catch(e){}
+    try{Quagga.offDetected(); Quagga.stop();}catch(e){}
     _quaggaRunning=false;
   }
   document.getElementById('scanner-modal').classList.remove('open');
