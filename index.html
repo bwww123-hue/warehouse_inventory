@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"/>
-<title>쉬포니에 창고 재고관리 V1.0.0</title>
+<title>창고 재고관리 — 공유 버전</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 html{touch-action:manipulation}
@@ -442,9 +442,15 @@ Promise.all([
   </div>
 
   <div class="stats">
-    <div class="stat"><div class="stat-label">전체 품목</div><div class="stat-value" id="stat-total">0</div></div>
-    <div class="stat"><div class="stat-label">전체 수량</div><div class="stat-value" id="stat-qty">0</div></div>
-    <div class="stat"><div class="stat-label">재고 부족</div><div class="stat-value danger" id="stat-low">0</div></div>
+    <div class="stat" style="cursor:pointer" onclick="setStatusFilter('all',document.querySelector('.filter-pill'))">
+      <div class="stat-label">전체 품목</div><div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat" style="cursor:pointer" onclick="setInstockFilter()" title="재고 있는 품목만 보기">
+      <div class="stat-label" id="stat-qty-label">전체 수량</div><div class="stat-value" id="stat-qty">0</div>
+    </div>
+    <div class="stat" style="cursor:pointer" onclick="setStatusFilter('low',document.querySelectorAll('.filter-pill')[1])">
+      <div class="stat-label">재고 부족</div><div class="stat-value danger" id="stat-low">0</div>
+    </div>
   </div>
 
   <div class="card">
@@ -833,12 +839,41 @@ function setCatFilter(cat,scope){
   else{pmCatFilter=cat;renderCatBar('pm-cat-bar','pm');renderProductTable();}
 }
 function setStatusFilter(f,el){
-  statusFilter=f;document.querySelectorAll('.status-filters .filter-pill').forEach(p=>p.classList.remove('active'));el.classList.add('active');renderItemGrid();
+  statusFilter=f;
+  document.querySelectorAll('.status-filters .filter-pill').forEach(p=>p.classList.remove('active'));
+  if(el) el.classList.add('active');
+  /* instock 필터 해제 */
+  _instockOnly=false;
+  document.getElementById('stat-qty-label').textContent='전체 수량';
+  document.getElementById('stat-qty').style.color='';
+  renderItemGrid();
+}
+let _instockOnly=false;
+function setInstockFilter(){
+  _instockOnly=!_instockOnly;
+  const label=document.getElementById('stat-qty-label');
+  const val=document.getElementById('stat-qty');
+  if(_instockOnly){
+    label.textContent='재고 있는 품목 ▼';
+    val.style.color='var(--color-text-info)';
+    /* 필터 칩 active 해제 */
+    document.querySelectorAll('.status-filters .filter-pill').forEach(p=>p.classList.remove('active'));
+  }else{
+    label.textContent='전체 수량';
+    val.style.color='';
+  }
+  renderItemGrid();
 }
 function renderItemGrid(){
   const q=(document.getElementById('main-search').value||'').toLowerCase();
   const grid=document.getElementById('item-grid');
-  let filtered=products.filter(p=>(p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q))&&(statusFilter==='all'||getStatus(p)===statusFilter)&&(mainCatFilter==='all'||p.category===mainCatFilter));
+  let filtered=products.filter(p=>{
+    const matchQ=(p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q));
+    const matchStatus=(statusFilter==='all'||getStatus(p)===statusFilter);
+    const matchCat=(mainCatFilter==='all'||p.category===mainCatFilter);
+    const matchInstock=!_instockOnly||p.qty>0;
+    return matchQ&&matchStatus&&matchCat&&matchInstock;
+  });
   if(!filtered.length){grid.innerHTML=`<div style="grid-column:1/-1;padding:24px 0;text-align:center;font-size:13px;color:var(--color-text-tertiary)">해당하는 품목이 없습니다</div>`;return;}
   grid.innerHTML=filtered.map(p=>{
     const s=getStatus(p),qc=s==='out'?'out':s==='low'?'low':'',col=p.color||'#888780';
