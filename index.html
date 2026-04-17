@@ -46,6 +46,19 @@ const WH_WS = "warehouse1";
 const genId = () => Math.random().toString(36).substr(2,9).toUpperCase();
 const today = () => new Date().toISOString().split("T")[0];
 
+// 전화번호 자동 포맷: 01012345678 → 010-1234-5678
+const formatPhone = p => {
+  if(!p) return "—";
+  const n=p.replace(/\D/g,"");
+  if(n.length===11) return `${n.slice(0,3)}-${n.slice(3,7)}-${n.slice(7)}`;
+  if(n.length===10){
+    if(n.startsWith("02")) return `${n.slice(0,2)}-${n.slice(2,6)}-${n.slice(6)}`;
+    return `${n.slice(0,3)}-${n.slice(3,6)}-${n.slice(6)}`;
+  }
+  if(n.length===9&&n.startsWith("02")) return `${n.slice(0,2)}-${n.slice(2,5)}-${n.slice(5)}`;
+  return p; // 패턴 미일치 → 원본
+};
+
 const DELIVERIES_SEED = [
   { order:1, deliveryDate:"2026-04-17", store:"이케아 고양점",  customerName:"김민준", phone:"010-1234-5678", address:"경기도 고양시 일산동구 중산로 123", color:"오크 브라운", items:"소파 3인용 ×1, 쿠션 ×4",      notes:"현관까지만",     rowColor:"#0d2744", status:"pending"    },
   { order:2, deliveryDate:"2026-04-17", store:"한샘몰",         customerName:"이서연", phone:"010-9876-5432", address:"서울시 마포구 합정동 456번지",    color:"화이트",     items:"식탁 4인용 ×1, 의자 ×4",       notes:"2층 엘베 없음",  rowColor:"#0d2a1a", status:"completed"  },
@@ -579,7 +592,7 @@ function PrintLabelModal({ d, onClose }) {
     w.document.write(`<!DOCTYPE html><html><head><title>배송 라벨</title><style>*{box-sizing:border-box}body{margin:0;padding:20px;font-family:'Malgun Gothic',sans-serif;background:#fff;color:#000}.hd{font-size:15px;font-weight:800;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px}.row{display:flex;margin:3px 0;font-size:12px}.k{width:65px;color:#666;flex-shrink:0}.bc{margin-top:12px;display:flex;flex-direction:column;align-items:center}svg{display:block}</style></head><body>${html}</body></html>`);
     w.document.close();setTimeout(()=>w.print(),600);
   };
-  const rows=[["배송일",d.deliveryDate],["구입처",d.store],["고객명",d.customerName],["연락처",d.phone],["주소",d.address],["품목",d.items],["색상",d.color]].filter(([,v])=>v);
+  const rows=[["배송일",d.deliveryDate],["구입처",d.store],["고객명",d.customerName],["연락처",formatPhone(d.phone)],["주소",d.address],["품목",d.items],["색상",d.color]].filter(([,v])=>v&&v!=="—");
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{background:C.card2,borderRadius:14,width:520,border:`1px solid ${C.border2}`}}>
@@ -812,7 +825,7 @@ function DeliveryPage() {
                         </td>
                         <td style={{...TD,paddingBottom:0,paddingTop:22,whiteSpace:"nowrap"}}>{d.store||"—"}</td>
                         <td style={{...TD,paddingBottom:0,paddingTop:22,fontWeight:800,whiteSpace:"nowrap",fontSize:"1.08em"}}>{d.customerName}</td>
-                        <td style={{...TD,paddingBottom:0,paddingTop:22,color:"#93c5fd",fontFamily:"monospace",whiteSpace:"nowrap"}}>{d.phone||"—"}</td>
+                        <td style={{...TD,paddingBottom:0,paddingTop:22,color:"#93c5fd",fontFamily:"monospace",whiteSpace:"nowrap"}}>{formatPhone(d.phone)}</td>
                         <td style={{...TD,paddingBottom:0,paddingTop:22,color:"#b0c4d8"}}>{d.address||"—"}</td>
                         <td style={{...TD,paddingBottom:0,paddingTop:22}}><StatusCell delivery={d} updateDelivery={updateDelivery}/></td>
                         <td style={{...TD,paddingBottom:0,paddingTop:22,textAlign:"center"}}>
