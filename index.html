@@ -69,7 +69,7 @@ body{font-family:var(--font-sans);background:var(--color-background-tertiary);co
 #quagga-container canvas{position:absolute;top:0;left:0;width:100%;height:100%}
 /* 가로형 스캔 가이드라인 오버레이 */
 .scan-overlay{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
-.scan-guide{width:88%;height:28%;position:relative;box-shadow:0 0 0 9999px rgba(0,0,0,0.5)}
+.scan-guide{width:94%;height:42%;position:relative;box-shadow:0 0 0 9999px rgba(0,0,0,0.5)}
 .scan-guide::before{content:'';position:absolute;inset:0;border:1.5px solid rgba(255,255,255,0.7)}
 .scan-guide-line{position:absolute;left:4%;right:4%;top:50%;height:2px;background:linear-gradient(90deg,transparent 0%,#E24B4A 30%,#E24B4A 70%,transparent 100%);animation:hscan 2s ease-in-out infinite}
 @keyframes hscan{0%,100%{opacity:.4}50%{opacity:1}}
@@ -783,7 +783,18 @@ function fbSaveProducts(){
   const obj={};
   products.forEach(p=>{obj[p.id]=p;});
   _ignoreUpdate=true;
-  db.ref(`${wsPath}/products`).set(obj).finally(()=>{setTimeout(()=>{_ignoreUpdate=false;},300);});
+  db.ref(`${wsPath}/products`).set(obj)
+    .then(()=>{
+      /* 저장 완료 후 일정 시간 뒤 리스너 재활성화 */
+      setTimeout(()=>{_ignoreUpdate=false;},500);
+    })
+    .catch(err=>{
+      console.error('Firebase save error:',err);
+      _ignoreUpdate=false;
+      showToast('저장 실패 — 다시 시도합니다.','danger');
+      /* 1초 후 자동 재시도 */
+      setTimeout(()=>fbSaveProducts(),1000);
+    });
   setSyncIndicator();
 }
 function fbPushLog(entry){
@@ -868,7 +879,11 @@ function renderItemGrid(){
   const q=(document.getElementById('main-search').value||'').toLowerCase();
   const grid=document.getElementById('item-grid');
   let filtered=products.filter(p=>{
-    const matchQ=(p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q));
+    const matchQ=!q||
+      p.name.toLowerCase().includes(q)||
+      (p.sku||'').toLowerCase().includes(q)||
+      (p.barcode||'').toLowerCase().includes(q)||
+      (p.category||'').toLowerCase().includes(q);
     const matchStatus=(statusFilter==='all'||getStatus(p)===statusFilter);
     const matchCat=(mainCatFilter==='all'||p.category===mainCatFilter);
     const matchInstock=!_instockOnly||p.qty>0;
@@ -893,7 +908,14 @@ function renderLogs(){
 }
 function renderProductTable(){
   const q=(document.getElementById('pm-search').value||'').toLowerCase();
-  const filtered=products.filter(p=>(p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q))&&(pmCatFilter==='all'||p.category===pmCatFilter));
+  const filtered=products.filter(p=>{
+    const matchQ=!q||
+      p.name.toLowerCase().includes(q)||
+      (p.sku||'').toLowerCase().includes(q)||
+      (p.barcode||'').toLowerCase().includes(q)||
+      (p.category||'').toLowerCase().includes(q);
+    return matchQ&&(pmCatFilter==='all'||p.category===pmCatFilter);
+  });
   const allChecked=filtered.length>0&&filtered.every(p=>checkedIds.has(p.id));
   document.getElementById('check-all').checked=allChecked;
   document.getElementById('check-all').indeterminate=!allChecked&&filtered.some(p=>checkedIds.has(p.id));
@@ -917,7 +939,14 @@ function renderProductTable(){
 function toggleCheck(id,el){if(el.checked)checkedIds.add(id);else checkedIds.delete(id);updateBulkActionBar();renderProductTable();}
 function toggleCheckAll(el){
   const q=(document.getElementById('pm-search').value||'').toLowerCase();
-  const filtered=products.filter(p=>(p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q))&&(pmCatFilter==='all'||p.category===pmCatFilter));
+  const filtered=products.filter(p=>{
+    const matchQ=!q||
+      p.name.toLowerCase().includes(q)||
+      (p.sku||'').toLowerCase().includes(q)||
+      (p.barcode||'').toLowerCase().includes(q)||
+      (p.category||'').toLowerCase().includes(q);
+    return matchQ&&(pmCatFilter==='all'||p.category===pmCatFilter);
+  });
   if(el.checked)filtered.forEach(p=>checkedIds.add(p.id));else filtered.forEach(p=>checkedIds.delete(p.id));
   updateBulkActionBar();renderProductTable();
 }
@@ -1127,16 +1156,38 @@ function showResult(p){
 function adjustDelta(d){if(!activeProduct)return;if(activeProduct.qty+delta+d<0)return;delta+=d;document.getElementById('r-qty').textContent=activeProduct.qty+delta;document.getElementById('r-delta').textContent=delta>0?'+'+delta:delta;}
 function commit(type){
   if(!activeProduct||delta===0){showToast('변경량이 0입니다.','danger');return;}
-  if(type==='out'&&delta>0)delta=-delta;if(type==='in'&&delta<0)delta=-delta;
-  const finalQty=activeProduct.qty+delta;if(finalQty<0){showToast('재고가 부족합니다.','danger');return;}
+  if(type==='out'&&delta>0)delta=-delta;
+  if(type==='in'&&delta<0)delta=-delta;
+  const finalQty=activeProduct.qty+delta;
+  if(finalQty<0){showToast('재고가 부족합니다.','danger');return;}
+
+  /* activeProduct는 products 배열의 참조 객체이지만,
+     Firebase 리스너가 products를 교체할 수 있으므로 id로 다시 찾아서 직접 수정 */
+  const targetId=activeProduct.id;
+  const idx=products.findIndex(p=>p.id===targetId);
+  if(idx===-1){showToast('품목을 찾을 수 없습니다.','danger');return;}
+  products[idx].qty=finalQty;
   activeProduct.qty=finalQty;
+
   const now=new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-  fbPushLog({type,name:activeProduct.name,qty:Math.abs(delta),time:now});
-  showToast(`${activeProduct.name} ${type==='in'?'입고':'출고'} ${Math.abs(delta)}개 완료`,'success');
-  cancelResult();fbSaveProducts();updateStats();renderItemGrid();
+  const name=activeProduct.name;
+  const absDelta=Math.abs(delta);
+
+  /* UI 먼저 닫고 저장 */
+  cancelResult();
+  fbSaveProducts();
+  fbPushLog({type,name,qty:absDelta,time:now});
+  updateStats();
+  renderItemGrid();
+  showToast(`${name} ${type==='in'?'입고':'출고'} ${absDelta}개 완료`,'success');
 }
 function cancelResult(){activeProduct=null;delta=0;document.getElementById('result-card').classList.remove('visible');document.getElementById('barcode-input').value='';}
-function lookupBarcode(){const val=document.getElementById('barcode-input').value.trim();if(!val)return;const p=products.find(x=>x.barcode===val||x.sku.toLowerCase()===val.toLowerCase());if(p){showResult(p);}else{showToast('해당 바코드를 찾을 수 없습니다.','danger');}}
+function lookupBarcode(){
+  const val=document.getElementById('barcode-input').value.trim();
+  if(!val)return;
+  const p=findProductByCode(val);
+  if(p){showResult(p);}else{showToast('해당 바코드를 찾을 수 없습니다.','danger');}
+}
 function showToast(msg,type){const t=document.getElementById('toast');t.textContent=msg;t.className='toast '+type;clearTimeout(t._timer);t._timer=setTimeout(()=>{t.className='toast'},3000);}
 function downloadTemplate(){
   const bin=atob(TEMPLATE_B64);const arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
@@ -1197,8 +1248,8 @@ function openScanner(){
         width:{min:640, ideal:1280},
         height:{min:480, ideal:720}
       },
-      /* 가로 중앙 띠 — 가로 바코드 특화 */
-      area:{top:'30%', right:'2%', left:'2%', bottom:'30%'}
+      /* 가로 중앙 띠 — 가이드와 동일한 비율 */
+      area:{top:'20%', right:'2%', left:'2%', bottom:'20%'}
     },
     locator:{
       patchSize:'large',   /* large = 더 넓은 패치 → 인식 범위 확대 */
@@ -1233,13 +1284,16 @@ function openScanner(){
         : [];
       const avgError = errors.length
         ? errors.reduce((a,b)=>a+b,0)/errors.length : 0;
-      if(avgError > 0.25) return; /* 오류율 25% 초과 시 무시 */
+      if(avgError > 0.35) return; /* 오류율 35% 초과 시 무시 */
+
+      /* Code 39는 앞뒤에 * 스타트/스톱 문자가 붙음 — 제거 후 매칭 */
+      const cleanCode = code.replace(/^\*|\*$/g,'').trim();
 
       /* 중복 방지 */
       const now=Date.now();
-      if(code===_lastCode && now-_lastCodeTime<2000) return;
-      _lastCode=code; _lastCodeTime=now;
-      onBarcodeDetected(code);
+      if(cleanCode===_lastCode && now-_lastCodeTime<2000) return;
+      _lastCode=cleanCode; _lastCodeTime=now;
+      onBarcodeDetected(cleanCode);
     });
 
     Quagga.start();
@@ -1263,9 +1317,19 @@ function setStatus(msg,cls){
   el.className='scanner-status'+(cls?' '+cls:'');
 }
 
+function normalizeCode(s){
+  return s.replace(/^\*|\*$/g,'').trim().toUpperCase();
+}
+function findProductByCode(raw){
+  const code=normalizeCode(raw);
+  return products.find(x=>
+    normalizeCode(x.barcode||'')===code ||
+    normalizeCode(x.sku||'')===code
+  );
+}
 function onBarcodeDetected(code){
   _scanLocked=true;
-  const p=products.find(x=>x.barcode===code||x.sku.toLowerCase()===code.toLowerCase());
+  const p=findProductByCode(code);
   if(p){
     setStatus('인식됨: '+p.name,'found');
     if(navigator.vibrate)navigator.vibrate(80);
@@ -1277,7 +1341,7 @@ function onBarcodeDetected(code){
   }else{
     setStatus('미등록 바코드: '+code,'notfound');
     setTimeout(()=>{
-      setStatus('가로 바코드를 가이드 안에 맞춰주세요','');
+      setStatus('바코드를 가이드 안에 맞춰주세요','');
       _scanLocked=false;
     },2000);
   }
