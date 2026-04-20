@@ -531,14 +531,12 @@ Promise.all([
         <thead><tr>
           <th style="width:4%;text-align:center"><input type="checkbox" id="check-all" onchange="toggleCheckAll(this)"/></th>
           <th style="width:3%"></th>
-          <th style="width:22%">품목명</th>
-          <th style="width:16%">바코드</th>
-          <th style="width:9%;text-align:right">수량</th>
-          <th style="width:9%;text-align:right">기준</th>
-          <th style="width:8%">단위</th>
-          <th style="width:13%">카테고리</th>
+          <th style="width:26%">품목명</th>
+          <th style="width:18%">바코드</th>
+          <th style="width:11%;text-align:right">수량</th>
+          <th style="width:16%">카테고리</th>
           <th style="width:10%;text-align:center">상태</th>
-          <th style="width:10%;text-align:center">조작</th>
+          <th style="width:14%;text-align:center">조작</th>
         </tr></thead>
         <tbody id="pm-body"></tbody>
       </table>
@@ -925,14 +923,18 @@ function renderProductTable(){
     <td style="font-weight:500">${p.name}</td>
     <td style="font-size:11px;color:var(--color-text-tertiary)">${p.barcode||'—'}</td>
     <td style="text-align:right">${p.qty.toLocaleString()}</td>
-    <td style="text-align:right;color:var(--color-text-secondary)">${p.reorder}</td>
-    <td style="font-size:12px;color:var(--color-text-secondary)">${p.unit||'—'}</td>
     <td style="font-size:12px;color:var(--color-text-secondary)">${p.category||'—'}</td>
     <td style="text-align:center"><span class="badge ${badgeClass(getStatus(p))}">${badgeLabel(getStatus(p))}</span></td>
-    <td style="text-align:center">
-      <button class="icon-btn copy" title="복사" onclick="copyProduct(${p.id})"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M3 11V3.5A1.5 1.5 0 014.5 2H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg></button>
-      <button class="icon-btn" title="수정" onclick="openEditModal(${p.id})"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg></button>
-      <button class="icon-btn del" title="삭제" onclick="askDelete(${p.id})"><svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5L11 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+    <td style="text-align:center;white-space:nowrap">
+      <button class="icon-btn copy" title="복사" onclick="copyProduct(${p.id})" style="font-size:11px;width:auto;padding:0 7px;gap:3px">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="M3 11V3.5A1.5 1.5 0 014.5 2H11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>복사
+      </button>
+      <button class="icon-btn" title="수정" onclick="openEditModal(${p.id})" style="font-size:11px;width:auto;padding:0 7px;gap:3px">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M11.5 2.5l2 2L5 13H3v-2L11.5 2.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" fill="none"/></svg>수정
+      </button>
+      <button class="icon-btn del" title="삭제" onclick="askDelete(${p.id})" style="font-size:11px;width:auto;padding:0 7px;gap:3px">
+        <svg width="11" height="11" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3h4v1M5 4l.5 9h5L11 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>삭제
+      </button>
     </td>
   </tr>`).join('');
 }
